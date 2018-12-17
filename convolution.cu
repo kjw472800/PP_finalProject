@@ -30,6 +30,10 @@ __global__ void MatrixMultipleTile(int *InputImage,int width,int height,int *fil
 
 }
 /*unfinished*/
+
+
+
+/* one feature map element map to one thread*/
 __global__ void MatrixMultiple(int *InputImage,int width,int height,int *filter,int filterWidth,int *featureMap)
 {
     /* get global row col */
@@ -59,10 +63,10 @@ void convolution(int *InputImage,int width,int height,int *filter,int filterWidt
 
     cudaMalloc(&featureMapd,(width-filterWidth+1)*(height-filterWidth+1)*sizeof(int));
 
-    featureMapWidthx=height-filterWidth+1;
+    featureMapWidthx=height-filterWidth+1; //feature map's width = origin width-featureWidth+1 
     featureMapWidthy=width-filterWidth+1;
 
-    x=(featureMapWidthx+TILE_WIDTH-1)/TILE_WIDTH;
+    x=(featureMapWidthx+TILE_WIDTH-1)/TILE_WIDTH; 
     y=(featureMapWidthy+TILE_WIDTH-1)/TILE_WIDTH;
     
     dim3 dimGrid(x,y);
