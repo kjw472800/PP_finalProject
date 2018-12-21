@@ -3,9 +3,10 @@
 #include <math.h>
 #include <time.h>
 
-#define TILE_WIDTH 256
+#define TILE_WIDTH 16
 
 /* unfinished */
+/*
 __global__ void MatrixMultipleTile(int *InputImage,int width,int height,int *filter,int filterWidth,int *featureMap)
 {
     __shared__ int tileImage[TILE_WIDTH][TILE_WIDTH];
@@ -29,6 +30,7 @@ __global__ void MatrixMultipleTile(int *InputImage,int width,int height,int *fil
     }
 
 }
+*/
 /*unfinished*/
 
 
@@ -40,6 +42,7 @@ __global__ void MatrixMultiple(int *InputImage,int width,int height,int *filter,
     int Row=blockIdx.y*TILE_WIDTH+threadIdx.y;
     int Col=blockIdx.x*TILE_WIDTH+threadIdx.x;
     int value=0;
+    int feathreMapwidth=width-filterWidth+1;
     for(int i=0;i<filterWidth;i++)
     {
         for(int j=0;j<filterWidth;j++)
@@ -47,33 +50,48 @@ __global__ void MatrixMultiple(int *InputImage,int width,int height,int *filter,
             value=filter[i*filterWidth+j]* InputImage[(Row+i)*width+Col+j];
         }
     }
-    featureMap[threadID]=value;
+    featureMap[feathreMapwidth*Row+Col]=value;
 }
 
 void convolution(int *InputImage,int width,int height,int *filter,int filterWidth,int *featureMap)
 {
     
     int *featureMapd,*InputImaged,*filterd;
-    int blockNum,x,y,featureMapWidthx,featureMapWidthy;
-    cudaMalloc(&InputImaged,width*height*sizeof(int));
-    cudaMemcpy(InputImaged,InputImage,width*height*sizeof(int),cudaMemcpyHostToDevice);
+    int x,y,featureMapWidth,featureMapHeight;
+    int originImageSize=width*height*sizeof(int);
+    int filterSize=filterWidth*filterWidth*sizeof(int);
+    int feathreMapSize;
+    featureMapHeight=height-filterWidth+1; //feature map's width = origin width-featureWidth+1 
+    featureMapWidth=width-filterWidth+1;
+    feathreMapSize=featureMapHeight*featureMapWidth*sizeof(int);
 
-    cudaMalloc(&filter,filterWidth*filterWidth*sizeof(int));
-    cudaMemcpy(filterd,filter,filterWidth*filterWidth*sizeof(int),cudaMemcpyHostToDevice);
 
-    cudaMalloc(&featureMapd,(width-filterWidth+1)*(height-filterWidth+1)*sizeof(int));
+    cudaMalloc(&InputImaged,originImageSize);
+    cudaMemcpy(InputImaged,InputImage,originImageSize,cudaMemcpyHostToDevice);
 
-    featureMapWidthx=height-filterWidth+1; //feature map's width = origin width-featureWidth+1 
-    featureMapWidthy=width-filterWidth+1;
+    cudaMalloc(&filterd,filterSize);
+    cudaMemcpy(filterd,filter,filterSize,cudaMemcpyHostToDevice);
 
-    x=(featureMapWidthx+TILE_WIDTH-1)/TILE_WIDTH; 
-    y=(featureMapWidthy+TILE_WIDTH-1)/TILE_WIDTH;
+    cudaMalloc(&featureMapd,feathreMapSize);
+
+
+    // determine which blocks
+    x=(featureMapWidth+TILE_WIDTH-1)/TILE_WIDTH; 
+    y=(featureMapHeight+TILE_WIDTH-1)/TILE_WIDTH;
     
     dim3 dimGrid(x,y);
     dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
+
     MatrixMultiple<<<dimGrid,dimBlock>>>(InputImaged,width,height,filterd,filterWidth,featureMapd);
     
-    cudaMemcpy(featureMap,featureMapd,size,cudaMemcpyDeviceToHost);
+    cudaMemcpy(featureMap,featureMapd,feathreMapSize,cudaMemcpyDeviceToHost);
     
     cudaFree(featureMapd);cudaFree(InputImaged);cudaFree(filterd);
+}
+
+int main(int argc, char *argv[])
+{
+	printf("Hello world\n");
+	
+	return 0;
 }
