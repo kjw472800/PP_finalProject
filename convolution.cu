@@ -72,26 +72,26 @@ __global__ void cntMatrixMultiple(int *InputImage,int width,int height,int filte
     //printf("%d %d\n",Row*width+Col,value);
 }
 
-int * cntconvolution(int *InputImage,int width,int height,int *filter,int filterWidth,int padding,int *result)
+int *cntconvolution(int *InputImage,int width,int height,int *filter,int filterWidth,int padding,int *result)
 {
 
-    int *featureMapd,*InputImaged,*filterd,*featureMap;
+    int *featureMapd,*InputImaged,*filterd,*featureMap,*afterpadding,*InputImage;
     int x,y,featureMapWidth,featureMapHeight;
-    int originImageSize=width*height*sizeof(int);
+    int paddingImageSize=(width+padding*2)*(height+padding*2)*sizeof(int);
     int filterSize=filterWidth*filterWidth*sizeof(int);
     int feathreMapSize;
     cout<<"in constant convolution"<<endl;
-    featureMapHeight=height-filterWidth+1; //feature map's width = origin width-featureWidth+1
-    featureMapWidth=width-filterWidth+1;
+    featureMapHeight=height; //feature map's width = origin width-featureWidth+1
+    featureMapWidth=width;
     feathreMapSize=featureMapHeight*featureMapWidth*sizeof(int);
+    InputImage= pad_array(OriginImage,width,height,padding);
     featureMap= new int[feathreMapSize];
-
     /*for(int i=0;i<width*height;i++)
     {
         cout<<i<<" "<<InputImage[i]<<endl;
     }*/
-    cudaMalloc(&InputImaged,originImageSize);
-    cudaMemcpy(InputImaged,InputImage,originImageSize,cudaMemcpyHostToDevice);
+    cudaMalloc(&InputImaged,paddingImageSize);
+    cudaMemcpy(InputImaged,InputImage,paddingImageSize,cudaMemcpyHostToDevice);
 
     cudaMemcpyToSymbol(cntfilterd, filter, sizeof(int) * FSize);
 
@@ -106,8 +106,9 @@ int * cntconvolution(int *InputImage,int width,int height,int *filter,int filter
     dim3 dimGrid(x,y);
     dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
 
-    cntMatrixMultiple<<<dimGrid,dimBlock>>>(InputImaged,width,height,filterWidth,featureMapd);
-
+    cntMatrixMultiple<<<dimGrid,dimBlock>>>(InputImaged,width+padding*2,height+padding*2,filterd,filterWidth,featureMapd);
+    gpuErrchk( cudaPeekAtLastError() );
+    gpuErrchk( cudaDeviceSynchronize() );
     cudaMemcpy(featureMap,featureMapd,feathreMapSize,cudaMemcpyDeviceToHost);
     /*for(int i=0;i<featureMapHeight*featureMapWidth;i++)
     {
@@ -115,34 +116,29 @@ int * cntconvolution(int *InputImage,int width,int height,int *filter,int filter
     }*/
     cudaFree(featureMapd);cudaFree(InputImaged);cudaFree(filterd);
 
-    return result=pad_array(featureMap,featureMapWidth,featureMapHeight,padding);
-
-    /*for(int i=0;i<width*height;i++)
-    {
-        cout<<i<<" "<<result[i]<<endl;
-    }*/
+    return featureMap;
 }
 
-int * convolution(int *InputImage,int width,int height,int *filter,int filterWidth,int padding,int *result)
+int * convolution(int *OriginImage,int width,int height,int *filter,int filterWidth,int padding,int *result)
 {
 
-    int *featureMapd,*InputImaged,*filterd,*featureMap;
+    int *featureMapd,*InputImaged,*filterd,*featureMap,*afterpadding,*InputImage;
     int x,y,featureMapWidth,featureMapHeight;
-    int originImageSize=width*height*sizeof(int);
+    int paddingImageSize=(width+padding*2)*(height+padding*2)*sizeof(int);
     int filterSize=filterWidth*filterWidth*sizeof(int);
     int feathreMapSize;
     cout<<"in normal convolution"<<endl;
-    featureMapHeight=height-filterWidth+1; //feature map's width = origin width-featureWidth+1
-    featureMapWidth=width-filterWidth+1;
+    featureMapHeight=height; //feature map's width = origin width-featureWidth+1
+    featureMapWidth=width;
     feathreMapSize=featureMapHeight*featureMapWidth*sizeof(int);
+    InputImage= pad_array(OriginImage,width,height,padding);
     featureMap= new int[feathreMapSize];
-
     /*for(int i=0;i<width*height;i++)
     {
         cout<<i<<" "<<InputImage[i]<<endl;
     }*/
-    cudaMalloc(&InputImaged,originImageSize);
-    cudaMemcpy(InputImaged,InputImage,originImageSize,cudaMemcpyHostToDevice);
+    cudaMalloc(&InputImaged,paddingImageSize);
+    cudaMemcpy(InputImaged,InputImage,paddingImageSize,cudaMemcpyHostToDevice);
 
     cudaMalloc(&filterd,filterSize);
     cudaMemcpy(filterd,filter,filterSize,cudaMemcpyHostToDevice);
@@ -158,7 +154,7 @@ int * convolution(int *InputImage,int width,int height,int *filter,int filterWid
     dim3 dimGrid(x,y);
     dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
 
-    MatrixMultiple<<<dimGrid,dimBlock>>>(InputImaged,width,height,filterd,filterWidth,featureMapd);
+    MatrixMultiple<<<dimGrid,dimBlock>>>(InputImaged,width+padding*2,height+padding*2,filterd,filterWidth,featureMapd);
     gpuErrchk( cudaPeekAtLastError() );
     gpuErrchk( cudaDeviceSynchronize() );
     cudaMemcpy(featureMap,featureMapd,feathreMapSize,cudaMemcpyDeviceToHost);
@@ -168,7 +164,7 @@ int * convolution(int *InputImage,int width,int height,int *filter,int filterWid
     }*/
     cudaFree(featureMapd);cudaFree(InputImaged);cudaFree(filterd);
 
-    return result=pad_array(featureMap,featureMapWidth,featureMapHeight,padding);
+    return featureMap;
 
     /*for(int i=0;i<width*height;i++)
     {
@@ -206,9 +202,9 @@ int main(int argc, char *argv[])
         printf("filter %d:\n", i);
         print_filter(fil_matrix[i], fil_size[i]);
 
-        conv_r=cntconvolution(image_r,image_width,image_height,fil_matrix[i],fil_size[i],1,conv_r);
-        conv_g=cntconvolution(image_g,image_width,image_height,fil_matrix[i],fil_size[i],1,conv_g);
-        conv_b=cntconvolution(image_b,image_width,image_height,fil_matrix[i],fil_size[i],1,conv_b);
+        conv_r=cntconvolution(image_r,image_width,image_height,fil_matrix[i],fil_size[i],(fil_size[i]-1)/2,conv_r);
+        conv_g=cntconvolution(image_g,image_width,image_height,fil_matrix[i],fil_size[i],(fil_size[i]-1)/2,conv_g);
+        conv_b=cntconvolution(image_b,image_width,image_height,fil_matrix[i],fil_size[i],(fil_size[i]-1)/2,conv_b);
         /*cout<<"print"<<endl;
         cout<<i<<endl;
         cout<<conv_r[0]<<endl;
@@ -253,24 +249,27 @@ __global__ void shareMatrixMultiple(int *InputImage,int width,int height,int *fi
 {
     __shared__ int tileImage[TILE_WIDTH][TILE_WIDTH];
 
-    int threadID=blockIdx.x*blockDim.x+threadIdx.x;
-
-    int bx=blockIdx.x;
-    int by=blockIdx.y;
-    int tx=blockIdx.x;
-    int ty=blockIdx.y;
-
-    int Row=by*TILE_WIDTH+ty;
-    int Col=bx*TILE_WIDTH+tx;
+    int Row=blockIdx.y*TILE_WIDTH+threadIdx.y;
+    int Col=blockIdx.x*TILE_WIDTH+threadIdx.x;
+    int value=0;
+    int feathreMapwidth=width-filterWidth+1;
 
     tileImage[tx][ty]=InputImage[Row*width+Col];
+    if(threadIdx.x %)
     __syncthreads();
-    int value=0;
-    for(int i=0;i<9;++i)
-    {
-        value+=5;
-    }
 
+    if(Row*width+Col<width*height)
+    {
+        for(int i=0;i<filterWidth;i++)
+        {
+            for(int j=0;j<filterWidth;j++)
+            {
+                value+=filter[i*filterWidth+j]* InputImage[(Row+i)*width+Col+j];
+            }
+        }
+        //printf("%d %d\n",Row*width+Col,value);
+        featureMap[feathreMapwidth*Row+Col]=value;
+    }
 }
 */
 /*unfinished*/
