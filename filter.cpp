@@ -26,7 +26,7 @@ void load_filter(const char *filename, int *num_filters, int ***filter_mat, int 
     for(int i = 0; i < *num_filters; i++)
     {
         inFile >> (*filter_size)[i];
-        (*filter_mat)[i] = new int [(*filter_size)[i] * sizeof(int)];
+        (*filter_mat)[i] = new int [(*filter_size)[i] * (*filter_size)[i] * sizeof(int)];
 
         for(int j = 0; j < (*filter_size)[i] * (*filter_size)[i]; j++)
             inFile >> (*filter_mat)[i][j];

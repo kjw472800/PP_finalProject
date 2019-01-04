@@ -6,9 +6,9 @@
 #include "image.h"
 #include "filter.h"
 
-#define TILE_WIDTH 16
+#define TILE_WIDTH 32
 #define TILE_HEIGHT 16
-#define FSize 9
+#define FSize 256
 //void convolution(int *InputImage,int width,int height,int *filter,int filterWidth,,int padding,int *result);
 using namespace std;
 
@@ -31,7 +31,7 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 __global__ void MatrixMultiple(int *InputImage,int width,int height,int *filter,int filterWidth,int *featureMap)
 {
     /* get global row col */
-    int Row=blockIdx.y*TILE_WIDTH+threadIdx.y;
+    int Row=blockIdx.y*TILE_HEIGHT+threadIdx.y;
     int Col=blockIdx.x*TILE_WIDTH+threadIdx.x;
     int value=0;
     int feathreMapwidth=width-filterWidth+1;
@@ -53,7 +53,7 @@ __global__ void MatrixMultiple(int *InputImage,int width,int height,int *filter,
 __global__ void cntMatrixMultiple(int *InputImage,int width,int height,int filterWidth,int *featureMap)
 {
     /* get global row col */
-    int Row=blockIdx.y*TILE_WIDTH+threadIdx.y;
+    int Row=blockIdx.y*TILE_HEIGHT+threadIdx.y;
     int Col=blockIdx.x*TILE_WIDTH+threadIdx.x;
     int value=0;
     int feathreMapwidth=width-filterWidth+1;
@@ -76,7 +76,7 @@ __global__ void sharecntMatrixMultiple(int *InputImage,int width,int height,int 
 {
     extern __shared__ int tileImage[];
 
-    int Row=blockIdx.y*TILE_WIDTH+threadIdx.y;
+    int Row=blockIdx.y*TILE_HEIGHT+threadIdx.y;
     int Col=blockIdx.x*TILE_WIDTH+threadIdx.x;
     int value=0;
     int feathreMapwidth=width-filterWidth+1;
@@ -89,11 +89,11 @@ __global__ void sharecntMatrixMultiple(int *InputImage,int width,int height,int 
     }
     if(threadIdx.y<filterWidth-1)
     {
-        tileImage[(threadIdx.y+TILE_WIDTH)*shareWidth+threadIdx.x]=InputImage[(Row+TILE_WIDTH)*width+Col];
+        tileImage[(threadIdx.y+TILE_HEIGHT)*shareWidth+threadIdx.x]=InputImage[(Row+TILE_HEIGHT)*width+Col];
     }
     if(threadIdx.x<filterWidth-1 && threadIdx.y<filterWidth-1)
     {
-        tileImage[(threadIdx.y+TILE_WIDTH)*shareWidth+threadIdx.x+TILE_WIDTH]=InputImage[(Row+TILE_WIDTH)*width+Col+TILE_WIDTH];
+        tileImage[(threadIdx.y+TILE_HEIGHT)*shareWidth+threadIdx.x+TILE_WIDTH]=InputImage[(Row+TILE_HEIGHT)*width+Col+TILE_WIDTH];
     }
     
     __syncthreads();
@@ -116,7 +116,7 @@ __global__ void shareMatrixMultiple(int *InputImage,int width,int height,int *fi
 {
     extern __shared__ int tileImage[];
 
-    int Row=blockIdx.y*TILE_WIDTH+threadIdx.y;
+    int Row=blockIdx.y*TILE_HEIGHT+threadIdx.y;
     int Col=blockIdx.x*TILE_WIDTH+threadIdx.x;
     int value=0;
     int feathreMapwidth=width-filterWidth+1;
@@ -129,11 +129,11 @@ __global__ void shareMatrixMultiple(int *InputImage,int width,int height,int *fi
     }
     if(threadIdx.y<filterWidth-1)
     {
-        tileImage[(threadIdx.y+TILE_WIDTH)*shareWidth+threadIdx.x]=InputImage[(Row+TILE_WIDTH)*width+Col];
+        tileImage[(threadIdx.y+TILE_HEIGHT)*shareWidth+threadIdx.x]=InputImage[(Row+TILE_HEIGHT)*width+Col];
     }
     if(threadIdx.x<filterWidth-1 && threadIdx.y<filterWidth-1)
     {
-        tileImage[(threadIdx.y+TILE_WIDTH)*shareWidth+threadIdx.x+TILE_WIDTH]=InputImage[(Row+TILE_WIDTH)*width+Col+TILE_WIDTH];
+        tileImage[(threadIdx.y+TILE_HEIGHT)*shareWidth+threadIdx.x+TILE_WIDTH]=InputImage[(Row+TILE_HEIGHT)*width+Col+TILE_WIDTH];
     }
     
     __syncthreads();
@@ -180,13 +180,13 @@ int * sharecntconvolution(int *OriginImage,int width,int height,int *filter,int 
     cout<<"in"<<endl;
     // determine which blocks
     x=(featureMapWidth+TILE_WIDTH-1)/TILE_WIDTH;
-    y=(featureMapHeight+TILE_WIDTH-1)/TILE_WIDTH;
+    y=(featureMapHeight+TILE_HEIGHT-1)/TILE_HEIGHT;
 
     cout<<x<<" "<<y<<endl;
     dim3 dimGrid(x,y);
-    dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
+    dim3 dimBlock(TILE_WIDTH,TILE_HEIGHT);
 
-    int Sharesize=(TILE_WIDTH+filterWidth-1)*(TILE_WIDTH+filterWidth-1);
+    int Sharesize=(TILE_WIDTH+filterWidth-1)*(TILE_HEIGHT+filterWidth-1);
     sharecntMatrixMultiple<<<dimGrid,dimBlock, Sharesize*sizeof(int)>>>(InputImaged,width+padding*2,height+padding*2,filterWidth,featureMapd);
 
     gpuErrchk( cudaPeekAtLastError() );
@@ -233,11 +233,11 @@ int *cntconvolution(int *OriginImage,int width,int height,int *filter,int filter
     cout<<"in"<<endl;
     // determine which blocks
     x=(featureMapWidth+TILE_WIDTH-1)/TILE_WIDTH;
-    y=(featureMapHeight+TILE_WIDTH-1)/TILE_WIDTH;
+    y=(featureMapHeight+TILE_HEIGHT-1)/TILE_HEIGHT;
 
     cout<<x<<" "<<y<<endl;
     dim3 dimGrid(x,y);
-    dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
+    dim3 dimBlock(TILE_WIDTH,TILE_HEIGHT);
 
     cntMatrixMultiple<<<dimGrid,dimBlock>>>(InputImaged,width+padding*2,height+padding*2,filterWidth,featureMapd);
     gpuErrchk( cudaPeekAtLastError() );
@@ -281,11 +281,11 @@ int * convolution(int *OriginImage,int width,int height,int *filter,int filterWi
     cout<<"in"<<endl;
     // determine which blocks
     x=(featureMapWidth+TILE_WIDTH-1)/TILE_WIDTH;
-    y=(featureMapHeight+TILE_WIDTH-1)/TILE_WIDTH;
+    y=(featureMapHeight+TILE_HEIGHT-1)/TILE_HEIGHT;
 
     cout<<x<<" "<<y<<endl;
     dim3 dimGrid(x,y);
-    dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
+    dim3 dimBlock(TILE_WIDTH,TILE_HEIGHT);
 
     MatrixMultiple<<<dimGrid,dimBlock>>>(InputImaged,width+padding*2,height+padding*2,filterd,filterWidth,featureMapd);
     gpuErrchk( cudaPeekAtLastError() );
@@ -334,13 +334,13 @@ int * shareconvolution(int *OriginImage,int width,int height,int *filter,int fil
     cout<<"in"<<endl;
     // determine which blocks
     x=(featureMapWidth+TILE_WIDTH-1)/TILE_WIDTH;
-    y=(featureMapHeight+TILE_WIDTH-1)/TILE_WIDTH;
+    y=(featureMapHeight+TILE_HEIGHT-1)/TILE_HEIGHT;
 
     cout<<x<<" "<<y<<endl;
     dim3 dimGrid(x,y);
-    dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
+    dim3 dimBlock(TILE_WIDTH,TILE_HEIGHT);
 
-    int Sharesize=(TILE_WIDTH+filterWidth-1)*(TILE_WIDTH+filterWidth-1);
+    int Sharesize=(TILE_WIDTH+filterWidth-1)*(TILE_HEIGHT+filterWidth-1);
     shareMatrixMultiple<<<dimGrid,dimBlock, Sharesize*sizeof(int)>>>(InputImaged,width+padding*2,height+padding*2,filterd,filterWidth,featureMapd);
     gpuErrchk( cudaPeekAtLastError() );
     gpuErrchk( cudaDeviceSynchronize() );
@@ -381,13 +381,13 @@ int * share2convolution(int *OriginImage,int width,int height,int *filter,int fi
     cout<<"in"<<endl;
     // determine which blocks
     x=(featureMapWidth+TILE_WIDTH-1)/TILE_WIDTH;
-    y=(featureMapHeight+TILE_WIDTH-1)/TILE_WIDTH;
+    y=(featureMapHeight+TILE_HEIGHT-1)/TILE_HEIGHT;
 
     cout<<x<<" "<<y<<endl;
     dim3 dimGrid(x,y);
-    dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
+    dim3 dimBlock(TILE_WIDTH,TILE_HEIGHT);
 
-    int Sharesize=(TILE_WIDTH+filterWidth-1)*(TILE_WIDTH+filterWidth-1);
+    int Sharesize=(TILE_WIDTH+filterWidth-1)*(TILE_HEIGHT+filterWidth-1);
     shareMatrixMultiple<<<dimGrid,dimBlock, Sharesize*sizeof(int)>>>(InputImaged,width+padding*2,height+padding*2,filterd,filterWidth,featureMapd);
     gpuErrchk( cudaPeekAtLastError() );
     gpuErrchk( cudaDeviceSynchronize() );
