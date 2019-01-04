@@ -7,6 +7,7 @@
 #include "filter.h"
 
 #define TILE_WIDTH 16
+#define TILE_HEIGHT 16
 #define FSize 9
 //void convolution(int *InputImage,int width,int height,int *filter,int filterWidth,,int padding,int *result);
 using namespace std;
@@ -351,11 +352,53 @@ int * shareconvolution(int *OriginImage,int width,int height,int *filter,int fil
     cudaFree(featureMapd);cudaFree(InputImaged);cudaFree(filterd);
 
     return featureMap;
+}
 
-    /*for(int i=0;i<width*height;i++)
+int * share2convolution(int *OriginImage,int width,int height,int *filter,int filterWidth,int padding,int *result)
+{
+
+    int *featureMapd,*InputImaged,*filterd,*featureMap,*afterpadding,*InputImage;
+    int x,y,featureMapWidth,featureMapHeight;
+    int paddingImageSize=(width+padding*2)*(height+padding*2)*sizeof(int);
+    int filterSize=filterWidth*filterWidth*sizeof(int);
+    int feathreMapSize;
+    cout<<"in share convolution ver.2"<<endl;
+    featureMapHeight=height; //feature map's width = origin width-featureWidth+1
+    featureMapWidth=width;
+    feathreMapSize=featureMapHeight*featureMapWidth*sizeof(int);
+    InputImage= pad_array(OriginImage,width,height,padding);
+    featureMap= new int[feathreMapSize];
+    
+    
+    cudaMalloc(&InputImaged,paddingImageSize);
+    cudaMemcpy(InputImaged,InputImage,paddingImageSize,cudaMemcpyHostToDevice);
+
+    cudaMalloc(&filterd,filterSize);
+    cudaMemcpy(filterd,filter,filterSize,cudaMemcpyHostToDevice);
+
+    cudaMalloc(&featureMapd,feathreMapSize);
+
+    cout<<"in"<<endl;
+    // determine which blocks
+    x=(featureMapWidth+TILE_WIDTH-1)/TILE_WIDTH;
+    y=(featureMapHeight+TILE_WIDTH-1)/TILE_WIDTH;
+
+    cout<<x<<" "<<y<<endl;
+    dim3 dimGrid(x,y);
+    dim3 dimBlock(TILE_WIDTH,TILE_WIDTH);
+
+    int Sharesize=(TILE_WIDTH+filterWidth-1)*(TILE_WIDTH+filterWidth-1);
+    shareMatrixMultiple<<<dimGrid,dimBlock, Sharesize*sizeof(int)>>>(InputImaged,width+padding*2,height+padding*2,filterd,filterWidth,featureMapd);
+    gpuErrchk( cudaPeekAtLastError() );
+    gpuErrchk( cudaDeviceSynchronize() );
+    cudaMemcpy(featureMap,featureMapd,feathreMapSize,cudaMemcpyDeviceToHost);
+    /*for(int i=0;i<featureMapHeight*featureMapWidth;i++)
     {
-        cout<<i<<" "<<result[i]<<endl;
+        cout<<i<<" "<<featureMap[i]<<endl;
     }*/
+    cudaFree(featureMapd);cudaFree(InputImaged);cudaFree(filterd);
+
+    return featureMap;
 }
 
 int main(int argc, char *argv[])
